@@ -12,6 +12,7 @@ import pandas as pd
 import itertools
 import matplotlib as mpl
 from matplotlib import pyplot as plt
+import dateutil
 
 
 ### SET INITIAL INPUTS###
@@ -874,7 +875,7 @@ def step_03(start_date=get_start_date(), end_date=get_end_date(), start_row=get_
     return path
 
 
-# TRANSFERS - GET TRANSFER DATA                                                 (197056, 5)
+# TRANSFERS - GET TRANSFER DATA
 def step_04(start_date=get_start_date(), end_date=get_end_date(), start_row=get_start_row(), path=get_path(), step=get_step()):
     """
     Open JSON file and UPDATE it (i.e. write directly to input JSON file)
@@ -925,7 +926,7 @@ def step_04(start_date=get_start_date(), end_date=get_end_date(), start_row=get_
     return path
 
 
-# TRANSFERS - PROCESS TRANSFERS AND ADD COLUMN FOR CONTRACT EXPIRY DATE         (49004, 10)
+# TRANSFERS - PROCESS TRANSFERS AND ADD COLUMN FOR CONTRACT EXPIRY DATE
 def step_05(start_date=get_start_date(), end_date=get_end_date(), start_row=get_start_row(), path=get_path(), step=get_step()):
     """
     Read JSON file as created with "step_04" function, reshape dataframe,
@@ -1039,7 +1040,18 @@ def step_07(start_date=get_start_date(), end_date=get_end_date(), start_row=get_
     df = df.dropna()
 
     # cast "expiry date" to datetime
-    df["expiry_date"] = df["expiry_date"].apply(lambda x: pd.to_datetime(x))
+    for label in df.index:
+        try:
+            df.at[label, "expiry_date"] = pd.to_datetime(df.at[label, "expiry_date"])
+        except dateutil.parser._parser.ParserError:
+            df = df.drop(labels=label)
+            continue
+        except pd._libs.tslibs.np_datetime.OutOfBoundsDatetime:
+            df = df.drop(labels=label)
+            continue
+        except ValueError:
+            df = df.drop(labels=label)
+            continue
 
     # write to NEW JSON file
     path = path[:-7] + "07.json"
