@@ -1137,6 +1137,9 @@ def step_10(start_date=get_start_date(), end_date=get_end_date(), start_row=get_
     # read JSON file
     df = pd.read_json(path)
 
+    # drop labels with no attributes
+    df = df.dropna()
+
     # unpack player attributes from dictionary to dataframe, drop NaN and "attributes" column
     def unpack_attr(row):
         for attr in row["attributes"][0].keys():
@@ -1144,16 +1147,34 @@ def step_10(start_date=get_start_date(), end_date=get_end_date(), start_row=get_
         return row
     df = df.apply(lambda x: unpack_attr(x), axis=1).drop(columns=["attributes"]).dropna()
 
-    # convert height to float
-    df["height"] = df["height"].apply(lambda x: re.search("\d,\d*", x)[0].replace(",", "."))
-    df["height"] = df["height"].astype(float)
+    # convert height to float and filter height > 1 meter
+    df["height"] = df["height"].apply(lambda x: re.search("\d,\d*", x)).dropna(). \
+        apply(lambda x: x[0]).dropna().apply(lambda x: re.sub(",", ".", x)). \
+        apply(lambda x: float(re.sub("\'", "", x)))
+    df = df[df["height"] > 1]
 
-    # convert date, contract expiry date and date of birth to datetime
-    df["date_birth"] = df["date_birth"].apply(lambda x: pd.to_datetime(x))
+    # convert date of birth to datetime
+    for label in df.index:
+        try:
+            df.at[label, "date_birth"] = pd.to_datetime(df.at[label, "date_birth"])
+        except dateutil.parser._parser.ParserError:
+            df = df.drop(labels=label)
+            continue
+        except pd._libs.tslibs.np_datetime.OutOfBoundsDatetime:
+            df = df.drop(labels=label)
+            continue
+        except ValueError:
+            df = df.drop(labels=label)
+            continue
 
     # filter out goalkeepers (nothing personal, they just have a different set of stats),
     # sorry guys, we'll miss you
     df = df[df["position"] != "Goalkeeper"]
+    print(df.shape)
+
+    # drop labels with "N/A" foot - it's kinda strange for professional football player
+    df = df[df["foot"] != "N/A"]
+    print(df.shape)
 
     # write dataframe to JSON
     path = path[:-7] + "10.json"
